@@ -66,7 +66,7 @@ class CrudTest extends TestCase
         $this->assertSame(2, QuestionCategory::where('slug', 'tech')->count());
     }
 
-    public function test_destroy_blocked_if_section_questions_exist(): void
+    public function test_destroy_by_admin_blocked_if_section_questions_exist(): void
     {
         $admin = User::factory()->admin()->create();
         $cert = Certification::factory()->published()->create();
@@ -79,7 +79,7 @@ class CrudTest extends TestCase
             ->assertStatus(409);
     }
 
-    public function test_destroy_allowed_when_no_questions(): void
+    public function test_destroy_by_admin_allowed_when_no_questions(): void
     {
         $admin = User::factory()->admin()->create();
         $cert = Certification::factory()->published()->create();
@@ -100,5 +100,86 @@ class CrudTest extends TestCase
         $this->actingAs($coach)
             ->get(route('admin.certifications.question-categories.index', $cert))
             ->assertForbidden();
+    }
+
+    public function test_coach_can_create_question_category(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $coach = User::factory()->coach()->create();
+        $cert = Certification::factory()->published()->create();
+
+        $cert->coaches()->attach($coach->id, [
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        $this->actingAs($coach)
+            ->post(route('admin.certifications.question-categories.store', $cert), [
+                'name' => 'テクノロジー系',
+                'slug' => 'technology',
+                'sort_order' => 10,
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('question_categories', [
+            'certification_id' => $cert->id,
+            'slug' => 'technology',
+        ]);
+    }
+
+    public function test_destroy_by_coach_blocked_if_section_questions_exist(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $coach = User::factory()->coach()->create();
+        $cert = Certification::factory()->published()->create();
+
+        $cert->coaches()->attach($coach->id, [
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        [, , $section] = $this->makePartChain($cert);
+        $category = QuestionCategory::factory()->forCertification($cert)->create();
+        SectionQuestion::factory()->forSection($section)->forCategory($category)->create();
+
+        $this->actingAs($coach)
+            ->deleteJson(route('admin.question-categories.destroy', $category))
+            ->assertStatus(409);
+    }
+
+    public function test_destroy_by_coach_allowed_when_no_questions(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $coach = User::factory()->coach()->create();
+        $cert = Certification::factory()->published()->create();
+
+        $cert->coaches()->attach($coach->id, [
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        $category = QuestionCategory::factory()->forCertification($cert)->create();
+
+        $this->actingAs($coach)
+            ->delete(route('admin.question-categories.destroy', $category))
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('question_categories', ['id' => $category->id]);
+    }
+
+    public function test_assigned_coach_can_view(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $coach = User::factory()->coach()->create();
+        $cert = Certification::factory()->published()->create();
+
+        $cert->coaches()->attach($coach->id, [
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        $this->actingAs($coach)
+            ->get(route('admin.certifications.question-categories.index', $cert))
+            ->assertOk();
     }
 }

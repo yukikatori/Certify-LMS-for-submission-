@@ -54,4 +54,29 @@ class StoreTest extends TestCase
             ->post(route('admin.certifications.parts.store', $cert), ['title' => 'X'])
             ->assertForbidden();
     }
+
+    public function test_coach_can_create_part_as_draft_with_auto_order(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $coach = User::factory()->coach()->create();
+        $cert = Certification::factory()->published()->create();
+
+        $cert->coaches()->attach($coach->id, [
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        Part::factory()->forCertification($cert)->state(['order' => 1])->create();
+
+        $response = $this->actingAs($coach)
+            ->post(route('admin.certifications.parts.store', $cert), [
+                'title' => '第2部 ネットワーク',
+                'description' => '通信プロトコルの基本',
+            ]);
+
+        $part = Part::where('title', '第2部 ネットワーク')->firstOrFail();
+        $response->assertRedirect(route('admin.parts.show', $part));
+        $this->assertSame('draft', $part->status->value);
+        $this->assertSame(2, $part->order);
+    }
 }

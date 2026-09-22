@@ -29,7 +29,7 @@ class PublishTest extends TestCase
         $this->assertNotNull($part->published_at);
     }
 
-    public function test_cannot_publish_already_published(): void
+    public function test_admin_cannot_publish_already_published(): void
     {
         $admin = User::factory()->admin()->create();
         $cert = Certification::factory()->published()->create();
@@ -47,6 +47,66 @@ class PublishTest extends TestCase
         $part = Part::factory()->forCertification($cert)->published()->create();
 
         $this->actingAs($admin)
+            ->post(route('admin.parts.unpublish', $part))
+            ->assertRedirect(route('admin.parts.show', $part));
+
+        $this->assertSame('draft', $part->fresh()->status->value);
+    }
+
+    public function test_coach_can_publish_draft_part(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $coach = User::factory()->coach()->create();
+        $cert = Certification::factory()->published()->create();
+
+        $cert->coaches()->attach($coach->id, [
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        $part = Part::factory()->forCertification($cert)->draft()->create();
+
+        $this->actingAs($coach)
+            ->post(route('admin.parts.publish', $part))
+            ->assertRedirect(route('admin.parts.show', $part));
+
+        $part->refresh();
+        $this->assertSame('published', $part->status->value);
+        $this->assertNotNull($part->published_at);
+    }
+
+    public function test_coach_cannot_publish_already_published(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $coach = User::factory()->coach()->create();
+        $cert = Certification::factory()->published()->create();
+
+        $cert->coaches()->attach($coach->id, [
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        $part = Part::factory()->forCertification($cert)->published()->create();
+
+        $this->actingAs($coach)
+            ->postJson(route('admin.parts.publish', $part))
+            ->assertStatus(409);
+    }
+
+    public function test_coach_can_unpublish_published_part(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $coach = User::factory()->coach()->create();
+        $cert = Certification::factory()->published()->create();
+
+        $cert->coaches()->attach($coach->id, [
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        $part = Part::factory()->forCertification($cert)->published()->create();
+
+        $this->actingAs($coach)
             ->post(route('admin.parts.unpublish', $part))
             ->assertRedirect(route('admin.parts.show', $part));
 

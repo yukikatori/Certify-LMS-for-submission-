@@ -68,6 +68,7 @@ class SectionPolicyTest extends TestCase
         $section = Section::factory()->for($chapter)->published()->create();
         $policy = new SectionPolicy;
 
+        $this->assertTrue($policy->view($coach, $section));
         $this->assertTrue($policy->update($coach, $section));
         $this->assertTrue($policy->preview($coach, $section));
     }
