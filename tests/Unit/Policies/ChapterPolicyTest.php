@@ -57,8 +57,19 @@ class ChapterPolicyTest extends TestCase
         $otherChapter = Chapter::factory()->for($otherPart)->published()->create();
         $policy = new ChapterPolicy;
 
+        $this->assertTrue($policy->viewAny($coach, $assignedPart));
+        $this->assertTrue($policy->view($coach, $assignedChapter));
+        $this->assertTrue($policy->create($coach, $assignedPart));
         $this->assertTrue($policy->update($coach, $assignedChapter));
+        $this->assertTrue($policy->delete($coach, $assignedChapter));
+        $this->assertTrue($policy->publish($coach, $assignedChapter));
+
+        $this->assertFalse($policy->viewAny($coach, $otherPart));
+        $this->assertFalse($policy->view($coach, $otherChapter));
+        $this->assertFalse($policy->create($coach, $otherPart));
         $this->assertFalse($policy->update($coach, $otherChapter));
+        $this->assertFalse($policy->delete($coach, $otherChapter));
+        $this->assertFalse($policy->publish($coach, $otherChapter));
     }
 
     public function test_student_can_view_only_published_chapter(): void

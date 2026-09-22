@@ -87,8 +87,24 @@ class SectionQuestionPolicyTest extends TestCase
                     ->create()->id,
             ]),
         ]);
+
+        $assignedSection = $assignedQuestion->section;
+
+        // 担当外資格の階層
+        $otherCert = Certification::factory()->published()->create();
+        $otherPart = Part::factory()->for($otherCert)->published()->create();
+        $otherChapter = Chapter::factory()->for($otherPart)->published()->create();
+        $otherSection = Section::factory()->for($otherChapter)->published()->create();
+        $otherQuestion = SectionQuestion::factory()->for($otherSection)->published()->create();
+
         $policy = new SectionQuestionPolicy;
 
+        $this->assertTrue($policy->viewAny($coach, $assignedSection));
+        $this->assertTrue($policy->view($coach, $assignedQuestion));
         $this->assertTrue($policy->update($coach, $assignedQuestion));
+
+        $this->assertFalse($policy->viewAny($coach, $otherSection));
+        $this->assertFalse($policy->view($coach, $otherQuestion));
+        $this->assertFalse($policy->update($coach, $otherQuestion));
     }
 }

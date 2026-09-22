@@ -55,8 +55,15 @@ class QuestionCategoryPolicyTest extends TestCase
         $policy = new QuestionCategoryPolicy;
 
         // Act & Assert
+        $this->assertTrue($policy->viewAny($coach, $assignedCert), 'coach は担当資格の category を閲覧できるはず');
+        $this->assertTrue($policy->create($coach, $assignedCert), 'coach は担当資格の category を作成できるはず');
         $this->assertTrue($policy->update($coach, $assignedCategory), 'coach は担当資格の category を更新できるはず');
+        $this->assertTrue($policy->delete($coach, $assignedCategory), 'coach は担当資格の category を削除できるはず');
+
+        $this->assertFalse($policy->viewAny($coach, $otherCert), '非担当資格の category は閲覧できないはず');
+        $this->assertFalse($policy->create($coach, $otherCert), '非担当資格の category は作成できないはず');
         $this->assertFalse($policy->update($coach, $otherCategory), '非担当資格の category は更新できないはず');
+        $this->assertFalse($policy->delete($coach, $otherCategory), '非担当資格の category は削除できないはず');
     }
 
     public function test_student_cannot_manage_any_category(): void
