@@ -6,18 +6,20 @@ namespace Tests\Feature\Auth;
 
 use App\Enums\InvitationStatus;
 use App\Enums\MeetingQuotaTransactionType;
+use App\Enums\MeetingStatus;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\Certification;
 use App\Models\CoachAvailability;
 use App\Models\Enrollment;
-use App\Models\Meeting;
 use App\Models\Invitation;
 use App\Models\Plan;
 use App\Models\User;
 use App\Services\InvitationTokenService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -391,7 +393,7 @@ class OnboardingTest extends TestCase
 
         // コーチを資格にアサイン
         $certification->coaches()->attach($coach->id, [
-            'id' => (string) \Illuminate\Support\Str::ulid(),
+            'id' => (string) Str::ulid(),
             'assigned_by_user_id' => $admin->id,
             'assigned_at' => now(),
             'unassigned_at' => null,
@@ -412,7 +414,7 @@ class OnboardingTest extends TestCase
             ->create();
 
         // 面談予約を実行
-        $scheduledAt = now()->startOfDay()->next(\Carbon\Carbon::MONDAY)->setTime(10, 0);
+        $scheduledAt = now()->startOfDay()->next(Carbon::MONDAY)->setTime(10, 0);
 
         $response = $this->actingAs($student)->post(
             route('meetings.store', $enrollment),
@@ -428,7 +430,7 @@ class OnboardingTest extends TestCase
             'student_id' => $student->id,
             'coach_id' => $coach->id,
             'enrollment_id' => $enrollment->id,
-            'status' => \App\Enums\MeetingStatus::Reserved->value,
+            'status' => MeetingStatus::Reserved->value,
         ]);
     }
 }
