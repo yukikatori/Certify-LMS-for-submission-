@@ -92,6 +92,37 @@ class ShowTest extends TestCase
         $response->assertSee('aria-label="未読 2 件"', false);
     }
 
+    public function test_rooms_pane_does_not_render_unread_badge_for_only_own_messages(): void
+    {
+        $student = User::factory()->student()->inProgress()->create();
+
+        $enrollmentCurrent = Enrollment::factory()->for($student)->create();
+        $roomCurrent = ChatRoom::factory()->for($enrollmentCurrent)->create();
+        ChatMember::factory()->create([
+            'chat_room_id' => $roomCurrent->id,
+            'user_id' => $student->id,
+            'last_read_at' => null,
+        ]);
+
+        $enrollmentOther = Enrollment::factory()->for($student)->create();
+        $roomOther = ChatRoom::factory()->for($enrollmentOther)->create();
+        ChatMember::factory()->create([
+            'chat_room_id' => $roomOther->id,
+            'user_id' => $student->id,
+            'last_read_at' => now()->subHour(),
+        ]);
+        ChatMessage::factory()->create([
+            'chat_room_id' => $roomOther->id,
+            'sender_user_id' => $student->id,
+            'created_at' => now(),
+        ]);
+
+        $response = $this->actingAs($student)->get(route('chat.show', $roomCurrent));
+
+        $response->assertOk();
+        $response->assertDontSee('aria-label="未読 1 件"', false);
+    }
+
     public function test_admin_can_view_via_admin_route_without_updating_last_read_at(): void
     {
         $student = User::factory()->student()->inProgress()->create();
