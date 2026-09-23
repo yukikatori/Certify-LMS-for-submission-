@@ -8,6 +8,10 @@ use App\Enums\InvitationStatus;
 use App\Enums\MeetingQuotaTransactionType;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
+use App\Models\Certification;
+use App\Models\CoachAvailability;
+use App\Models\Enrollment;
+use App\Models\Meeting;
 use App\Models\Invitation;
 use App\Models\Plan;
 use App\Models\User;
@@ -337,6 +341,94 @@ class OnboardingTest extends TestCase
             'id' => $invitation->user_id,
             'status' => UserStatus::InProgress->value,
             'meeting_url' => null,
+        ]);
+    }
+
+    public function test_user_can_login_after_onboarding(): void
+    {
+        $invitation = $this->freshInvitation();
+
+        $this->post($this->postUrl($invitation), [
+            'name' => '受講太郎',
+            'password' => 'secret-pass',
+            'password_confirmation' => 'secret-pass',
+        ]);
+
+        auth()->logout();
+
+        $response = $this->post('/login', [
+            'email' => $invitation->email,
+            'password' => 'secret-pass',
+        ]);
+
+        $response->assertRedirect(route('dashboard.index'));
+        $this->assertAuthenticatedAs($invitation->user);
+    }
+
+    public function test_user_can_book_meeting_after_onboarding(): void
+    {
+        // プラン付きの招待ユーザーを作成
+        $plan = $this->plan(durationDays: 90, quota: 6);
+        $invitation = $this->freshInvitation(plan: $plan);
+
+        // オンボーディング完了（パスワード設定）
+        $this->post($this->postUrl($invitation), [
+            'name' => '受講太郎',
+            'password' => 'secret-pass',
+            'password_confirmation' => 'secret-pass',
+        ]);
+
+        $student = $invitation->user;
+
+        // 面談予約に必要な前提条件を構築
+        $admin = User::factory()->admin()->create();
+        $coach = User::factory()->coach()->inProgress()->create([
+            'meeting_url' => 'https://meet.example.com/coach-room',
+        ]);
+
+        // 資格
+        $certification = Certification::factory()->published()->create();
+
+        // コーチを資格にアサイン
+        $certification->coaches()->attach($coach->id, [
+            'id' => (string) \Illuminate\Support\Str::ulid(),
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+            'unassigned_at' => null,
+        ]);
+
+        // コーチの空き時間
+        CoachAvailability::factory()
+            ->forCoach($coach)
+            ->onDay(1) // 月曜
+            ->timeRange('09:00:00', '18:00:00')
+            ->create();
+
+        // Enrollment
+        $enrollment = Enrollment::factory()
+            ->for($student, 'user')
+            ->for($certification)
+            ->learning()
+            ->create();
+
+        // 面談予約を実行
+        $scheduledAt = now()->startOfDay()->next(\Carbon\Carbon::MONDAY)->setTime(10, 0);
+
+        $response = $this->actingAs($student)->post(
+            route('meetings.store', $enrollment),
+            [
+                'scheduled_at' => $scheduledAt->format('Y-m-d\TH:i:s'),
+                'topic' => '相談したい',
+            ]
+        );
+
+        $response->assertRedirect();
+
+        $this->assertDatabaseHas('meetings', [
+            'student_id' => $student->id,
+            'coach_id' => $coach->id,
+            'enrollment_id' => $enrollment->id,
+            'status' => \App\Enums\MeetingStatus::Reserved->value,
         ]);
     }
 }
