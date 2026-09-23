@@ -72,7 +72,7 @@ class IndexTest extends TestCase
         $response->assertDontSee('PMP Certification');
     }
 
-    public function test_status_filter_returns_only_matching_status(): void
+    public function test_status_filter_returns_matching_published_status(): void
     {
         $admin = User::factory()->admin()->create();
         Certification::factory()->draft()->create(['name' => 'Draft One']);
@@ -85,6 +85,36 @@ class IndexTest extends TestCase
         $response->assertSee('Published One');
         $response->assertDontSee('Draft One');
         $response->assertDontSee('Archived One');
+    }
+
+    public function test_status_filter_returns_matching_draft_status(): void
+    {
+        $admin = User::factory()->admin()->create();
+        Certification::factory()->draft()->create(['name' => 'Draft One']);
+        Certification::factory()->published()->create(['name' => 'Published One']);
+        Certification::factory()->archived()->create(['name' => 'Archived One']);
+
+        $response = $this->actingAs($admin)->get(route('admin.certifications.index', ['status' => 'draft']));
+
+        $response->assertOk();
+        $response->assertSee('Draft One');
+        $response->assertDontSee('Published One');
+        $response->assertDontSee('Archived One');
+    }
+
+    public function test_status_filter_returns_matching_archived_status(): void
+    {
+        $admin = User::factory()->admin()->create();
+        Certification::factory()->draft()->create(['name' => 'Draft One']);
+        Certification::factory()->published()->create(['name' => 'Published One']);
+        Certification::factory()->archived()->create(['name' => 'Archived One']);
+
+        $response = $this->actingAs($admin)->get(route('admin.certifications.index', ['status' => 'archived']));
+
+        $response->assertOk();
+        $response->assertSee('Archived One');
+        $response->assertDontSee('Published One');
+        $response->assertDontSee('Draft One');
     }
 
     public function test_category_filter(): void
