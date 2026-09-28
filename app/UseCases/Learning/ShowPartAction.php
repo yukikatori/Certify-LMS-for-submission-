@@ -9,7 +9,7 @@ use App\Enums\ContentStatus;
 use App\Enums\EnrollmentStatus;
 use App\Models\Part;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
+use App\Services\Learning\LearningProgressService;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -17,10 +17,14 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  *
  * 公開済 Chapter 一覧 + Part の Published 確認 (非公開なら 404) に加え、
  * 各 Chapter の Section 総数 / 読了済 Section 数 を 1 ショット SQL で集計して Blade に渡す
- * (Chapter 完了バッジの表示用)。受講生が当該資格に未登録または非アクティブな場合は 403。
+ * (Chapter 完了バッジの表示用)。受講生が当該資格に未登録の場合は完了数 0 として扱う。
  */
 final class ShowPartAction
 {
+    public function __construct(
+        private readonly LearningProgressService $progressService,
+    ) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -28,9 +32,14 @@ final class ShowPartAction
     {
         $part->loadMissing('certification');
 
-        if ($part->status !== ContentStatus::Published
-            || $part->certification === null
-            || $part->certification->status !== CertificationStatus::Published) {
+        // Part が null または Draft → 404
+        if ($part === null || $part->status !== ContentStatus::Published) {
+            throw new NotFoundHttpException;
+        }
+
+        // Certification が null または 公開中ではない → 404
+        if ($part->certification === null ||
+            $part->certification->status !== CertificationStatus::Published) {
             throw new NotFoundHttpException;
         }
 
@@ -54,23 +63,8 @@ final class ShowPartAction
             ])
             ->get();
 
-        $completedByChapter = [];
-        if ($enrollment !== null && $chapters->isNotEmpty()) {
-            $rows = DB::table('sections')
-                ->join('section_progresses', function ($join) use ($enrollment) {
-                    $join->on('section_progresses.section_id', '=', 'sections.id')
-                        ->where('section_progresses.enrollment_id', '=', $enrollment->id);
-                })
-                ->whereIn('sections.chapter_id', $chapters->pluck('id'))
-                ->where('sections.status', ContentStatus::Published->value)
-                ->groupBy('sections.chapter_id')
-                ->selectRaw('sections.chapter_id AS chapter_id, COUNT(*) AS done')
-                ->get();
-
-            foreach ($rows as $row) {
-                $completedByChapter[(string) $row->chapter_id] = (int) $row->done;
-            }
-        }
+        $completedByChapter = $this->progressService
+            ->completedSectionCountsByChapter($enrollment, $chapters);
 
         return [
             'part' => $part->load('certification'),
