@@ -25,7 +25,7 @@
             'upcoming' => '今後の予定',
             'past' => '過去の面談',
             'all' => 'すべて',
-        ]" :active="$filter" />
+        ]" :active="$filter" param="filter" />
     </div>
 
     @if ($meetings->isEmpty())
