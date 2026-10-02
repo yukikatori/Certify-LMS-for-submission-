@@ -279,6 +279,26 @@ class User extends Authenticatable
     }
 
     /**
+     * 質問掲示板：ユーザーに紐づく投稿
+     *
+     * @return HasMany<QaThread, $this>
+     */
+    public function qaThreads(): HasMany
+    {
+        return $this->hasMany(QaThread::class, 'user_id');
+    }
+
+    /**
+     * 質問掲示板：ユーザーに紐づく返信
+     *
+     * @return HasMany<QaReply, $this>
+     */
+    public function qaReplies(): HasMany
+    {
+        return $this->hasMany(QaReply::class, 'user_id');
+    }
+
+    /**
      * Laravel フレームワーク側のシグナル(`Illuminate\Foundation\Auth\User::sendPasswordResetNotification($token)`)
      * との LSP 整合のため、引数に型宣言を付与しない(親クラスが parameter type なしで宣言しているため)。
      *
