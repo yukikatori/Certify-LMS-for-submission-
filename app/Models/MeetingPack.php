@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\MeetingPackStatus;
+use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -43,6 +44,10 @@ class MeetingPack extends Model
         'sort_order' => 'integer',
     ];
 
+    protected $attributes = [
+        'status' => MeetingPackStatus::Draft->value,
+    ];
+
     /**
      * @return BelongsTo<User, $this>
      */
@@ -77,5 +82,20 @@ class MeetingPack extends Model
     public function scopeOrdered(Builder $query): Builder
     {
         return $query->orderBy('sort_order')->orderByDesc('created_at');
+    }
+
+    /**
+     * 操作者ロールに応じて一覧表示行を絞り込む scope。admin は可、その他は不可。
+     *
+     * @param Builder<MeetingPack> $query
+     *
+     * @return Builder<MeetingPack>
+     */
+    public function scopeForUser(Builder $query, User $user): Builder
+    {
+        return match ($user->role) {
+            UserRole::Admin => $query,
+            default => $query->whereRaw('1 = 0'),
+        };
     }
 }
