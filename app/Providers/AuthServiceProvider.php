@@ -10,6 +10,7 @@ use App\Models\Chapter;
 use App\Models\ChatRoom;
 use App\Models\CoachAvailability;
 use App\Models\Enrollment;
+use App\Models\EnrollmentGoal;
 use App\Models\Invitation;
 use App\Models\LearningHourTarget;
 use App\Models\LearningSession;
@@ -37,6 +38,7 @@ use App\Policies\ChapterViewPolicy;
 use App\Policies\ChatRoomPolicy;
 use App\Policies\CoachAvailabilityPolicy;
 use App\Policies\EnrollmentPolicy;
+use App\Policies\EnrollmentGoalPolicy;
 use App\Policies\InvitationPolicy;
 use App\Policies\LearningHourTargetPolicy;
 use App\Policies\LearningSessionPolicy;
@@ -90,6 +92,7 @@ class AuthServiceProvider extends ServiceProvider
         MockExamQuestion::class => MockExamQuestionPolicy::class,
         MockExamSession::class => MockExamSessionPolicy::class,
         Enrollment::class => EnrollmentPolicy::class,
+        EnrollmentGoal::class => EnrollmentGoalPolicy::class,
         SectionProgress::class => SectionProgressPolicy::class,
         LearningSession::class => LearningSessionPolicy::class,
         LearningHourTarget::class => LearningHourTargetPolicy::class,

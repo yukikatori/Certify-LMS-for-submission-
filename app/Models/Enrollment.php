@@ -91,6 +91,14 @@ class Enrollment extends Model
     }
 
     /**
+     * @return HasMany<EnrollmentGoal, $this>
+     */
+    public function goals(): HasMany
+    {
+        return $this->hasMany(EnrollmentGoal::class);
+    }
+
+    /**
      * @return HasMany<MockExamSession, $this>
      */
     public function mockExamSessions(): HasMany
