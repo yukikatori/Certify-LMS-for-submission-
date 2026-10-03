@@ -9,6 +9,8 @@ use App\Models\ChatMember;
 use App\Models\ChatMessage;
 use App\Models\ChatRoom;
 use App\Models\User;
+use App\Notifications\BusinessEventNotification;
+use App\Services\NotificationRecipientService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -21,6 +23,10 @@ use Illuminate\Support\Facades\DB;
  */
 final class StoreMessageAction
 {
+    public function __construct(
+        private readonly NotificationRecipientService $notificationRecipients,
+    ) {}
+
     /**
      * @param array{body: string} $validated
      */
@@ -39,10 +45,50 @@ final class StoreMessageAction
                 ->update(['last_read_at' => now()]);
 
             DB::afterCommit(function () use ($message): void {
+                $message->loadMissing([
+                    'sender',
+                    'chatRoom.enrollment.certification',
+                    'chatRoom.members.user',
+                ]);
+
+                $this->notifyChatRecipients($message);
+
                 broadcast(new ChatMessageSent($message->load('sender')))->toOthers();
             });
 
             return $message;
         });
+    }
+
+    private function notifyChatRecipients(ChatMessage $message): void
+    {
+        $room = $message->chatRoom;
+        $certificationName = $room->enrollment?->certification?->name ?? '受講資格';
+
+        foreach ($room->members as $member) {
+            $recipient = $member->user;
+
+            if ($recipient === null) {
+                continue;
+            }
+
+            if ((string) $recipient->id === (string) $message->sender_user_id) {
+                continue;
+            }
+
+            if (! $this->notificationRecipients->canReceive($recipient)) {
+                continue;
+            }
+
+            $recipient->notify(new BusinessEventNotification([
+                'notification_type' => 'chat_message_received',
+                'title' => 'chat に新着メッセージがあります',
+                'message' => $message->sender->name.'さんから「'.$certificationName.'」のchatにメッセージが届きました。',
+                'body_preview' => mb_strimwidth($message->body, 0, 120, '...'),
+                'action_url' => route('chat.show', $room),
+                'related_type' => 'chat_message',
+                'related_id' => (string) $message->id,
+            ]));
+        }
     }
 }

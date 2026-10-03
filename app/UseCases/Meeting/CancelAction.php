@@ -9,6 +9,8 @@ use App\Exceptions\Mentoring\MeetingAlreadyStartedException;
 use App\Exceptions\Mentoring\MeetingStatusTransitionException;
 use App\Models\Meeting;
 use App\Models\User;
+use App\Notifications\BusinessEventNotification;
+use App\Services\NotificationRecipientService;
 use App\UseCases\MeetingQuota\RefundQuotaAction;
 use Illuminate\Support\Facades\DB;
 
@@ -20,6 +22,7 @@ final class CancelAction
 {
     public function __construct(
         private RefundQuotaAction $refundAction,
+        private NotificationRecipientService $notificationRecipients,
     ) {}
 
     public function __invoke(User $actor, Meeting $meeting): Meeting
@@ -42,7 +45,43 @@ final class CancelAction
 
             ($this->refundAction)($locked->student, (string) $locked->id);
 
+            DB::afterCommit(function () use ($locked, $actor): void {
+                $locked->loadMissing(['student', 'coach', 'enrollment.certification']);
+
+                $this->notifyMeetingCanceledRecipients($locked, $actor);
+            });
+
             return $locked->fresh();
         });
+    }
+
+    private function notifyMeetingCanceledRecipients(Meeting $meeting, User $actor): void
+    {
+        $scheduledAt = $meeting->scheduled_at->format('Y/m/d H:i');
+        $certificationName = $meeting->enrollment?->certification?->name ?? '受講資格';
+
+        foreach ([$meeting->student, $meeting->coach] as $recipient) {
+            if ($recipient === null) {
+                continue;
+            }
+
+            if ((string) $recipient->id === (string) $actor->id) {
+                continue;
+            }
+
+            if (! $this->notificationRecipients->canReceive($recipient)) {
+                continue;
+            }
+
+            $recipient->notify(new BusinessEventNotification([
+                'notification_type' => 'meeting_canceled',
+                'title' => '面談がキャンセルされました',
+                'message' => $actor->name.'さんが '.$scheduledAt.' の'.$certificationName.'面談をキャンセルしました。',
+                'body_preview' => mb_strimwidth($meeting->topic ?? '', 0, 120, '...'),
+                'action_url' => route('meetings.show', $meeting),
+                'related_type' => 'meeting',
+                'related_id' => (string) $meeting->id,
+            ]));
+        }
     }
 }

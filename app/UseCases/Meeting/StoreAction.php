@@ -11,9 +11,11 @@ use App\Models\Certification;
 use App\Models\Enrollment;
 use App\Models\Meeting;
 use App\Models\User;
+use App\Notifications\BusinessEventNotification;
 use App\Services\CoachMeetingLoadService;
 use App\Services\MeetingAvailabilityService;
 use App\Services\MeetingQuotaService;
+use App\Services\NotificationRecipientService;
 use App\UseCases\MeetingQuota\ConsumeQuotaAction;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -32,6 +34,7 @@ final class StoreAction
         private CoachMeetingLoadService $coachLoadService,
         private MeetingQuotaService $quotaService,
         private ConsumeQuotaAction $consumeAction,
+        private NotificationRecipientService $notificationRecipients,
     ) {}
 
     /**
@@ -80,8 +83,40 @@ final class StoreAction
             $transaction = ($this->consumeAction)($student, $meeting->id);
             $meeting->update(['meeting_quota_transaction_id' => $transaction->id]);
 
+            DB::afterCommit(function () use ($meeting): void {
+                $meeting->loadMissing(['student', 'coach', 'enrollment.certification']);
+
+                $this->notifyMeetingReservedRecipients($meeting);
+            });
+
             return $meeting->fresh();
         });
+    }
+
+    private function notifyMeetingReservedRecipients(Meeting $meeting): void
+    {
+        $scheduledAt = $meeting->scheduled_at->format('Y/m/d H:i');
+        $certificationName = $meeting->enrollment?->certification?->name ?? '受講資格';
+
+        foreach ([$meeting->student, $meeting->coach] as $recipient) {
+            if ($recipient === null) {
+                continue;
+            }
+
+            if (! $this->notificationRecipients->canReceive($recipient)) {
+                continue;
+            }
+
+            $recipient->notify(new BusinessEventNotification([
+                'notification_type' => 'meeting_reserved',
+                'title' => '面談が予約されました',
+                'message' => $certificationName.'の面談が '.$scheduledAt.' に予約されました。',
+                'body_preview' => mb_strimwidth($meeting->topic ?? '', 0, 120, '...'),
+                'action_url' => route('meetings.show', $meeting),
+                'related_type' => 'meeting',
+                'related_id' => (string) $meeting->id,
+            ]));
+        }
     }
 
     /**

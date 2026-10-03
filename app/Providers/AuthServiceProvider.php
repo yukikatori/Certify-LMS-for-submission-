@@ -40,12 +40,13 @@ use App\Policies\EnrollmentPolicy;
 use App\Policies\InvitationPolicy;
 use App\Policies\LearningHourTargetPolicy;
 use App\Policies\LearningSessionPolicy;
-use App\Policies\MeetingPolicy;
 use App\Policies\MeetingPackPolicy;
+use App\Policies\MeetingPolicy;
 use App\Policies\MeetingQuotaPolicy;
 use App\Policies\MockExamPolicy;
 use App\Policies\MockExamQuestionPolicy;
 use App\Policies\MockExamSessionPolicy;
+use App\Policies\NotificationPolicy;
 use App\Policies\PartPolicy;
 use App\Policies\PartViewPolicy;
 use App\Policies\PlanPolicy;
@@ -63,6 +64,7 @@ use App\Policies\SectionViewPolicy;
 use App\Policies\UserPolicy;
 use App\Policies\WeakDrillPolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Gate;
 
 class AuthServiceProvider extends ServiceProvider
@@ -99,6 +101,7 @@ class AuthServiceProvider extends ServiceProvider
         CoachAvailability::class => CoachAvailabilityPolicy::class,
         QaThread::class => QaThreadPolicy::class,
         QaReply::class => QaReplyPolicy::class,
+        DatabaseNotification::class => NotificationPolicy::class,
     ];
 
     /**

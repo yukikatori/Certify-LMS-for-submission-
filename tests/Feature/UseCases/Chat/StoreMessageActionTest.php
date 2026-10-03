@@ -68,4 +68,47 @@ class StoreMessageActionTest extends TestCase
         $this->assertSame(ChatRoom::class, $params[1]->getType()?->getName());
         $this->assertSame('array', $params[2]->getType()?->getName());
     }
+
+    public function test_sends_database_notification_to_room_members_except_sender(): void
+    {
+        Event::fake([ChatMessageSent::class]);
+
+        $student = User::factory()->student()->inProgress()->create();
+        $coach = User::factory()->coach()->inProgress()->create();
+
+        $enrollment = Enrollment::factory()->for($student)->create();
+        $room = ChatRoom::factory()->for($enrollment)->create();
+
+        ChatMember::factory()->create([
+            'chat_room_id' => $room->id,
+            'user_id' => $student->id,
+        ]);
+
+        ChatMember::factory()->create([
+            'chat_room_id' => $room->id,
+            'user_id' => $coach->id,
+        ]);
+
+        $message = app(StoreMessageAction::class)($student, $room, [
+            'body' => '学習計画について相談したいです。',
+        ]);
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_type' => $coach->getMorphClass(),
+            'notifiable_id' => $coach->id,
+        ]);
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_type' => $student->getMorphClass(),
+            'notifiable_id' => $student->id,
+        ]);
+
+        $notification = $coach->notifications()->first();
+
+        $this->assertNotNull($notification);
+        $this->assertSame('chat_message_received', $notification->data['notification_type']);
+        $this->assertSame('chat_message', $notification->data['related_type']);
+        $this->assertSame((string) $message->id, $notification->data['related_id']);
+        $this->assertSame(route('chat.show', $room), $notification->data['action_url']);
+    }
 }
