@@ -171,6 +171,47 @@ class PlanControllerTest extends TestCase
         $this->assertSame(PlanStatus::Draft, $plan->fresh()->status);
     }
 
+    public function test_store_validation_fails(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.plans.store'), $this->validPayload(['name' => '']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('name');
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.plans.store'), $this->validPayload(['duration_days' => 0]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('duration_days');
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.plans.store'), $this->validPayload(['default_meeting_quota' => -1]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('default_meeting_quota');
+    }
+
+    public function test_update_validation_fails(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $plan = Plan::factory()->draft()->create();
+
+        $this->actingAs($admin)
+            ->patchJson(route('admin.plans.update', $plan), $this->validPayload(['name' => '']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('name');
+
+        $this->actingAs($admin)
+            ->patchJson(route('admin.plans.update', $plan), $this->validPayload(['duration_days' => 0]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('duration_days');
+
+        $this->actingAs($admin)
+            ->patchJson(route('admin.plans.update', $plan), $this->validPayload(['default_meeting_quota' => -1]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('default_meeting_quota');
+    }
+
     #[DataProvider('invalidTransitions')]
     public function test_invalid_transition_returns_conflict(string $factoryState, string $routeName): void
     {
