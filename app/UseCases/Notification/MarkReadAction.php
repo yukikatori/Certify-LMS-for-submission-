@@ -20,6 +20,10 @@ final class MarkReadAction
 
         $data = is_array($notification->data) ? $notification->data : [];
 
+        if (($data['notification_type'] ?? null) === 'admin_announcement') {
+            return route('notifications.show', $notification);
+        }
+
         return $data['action_url'] ?? null;
     }
 }
