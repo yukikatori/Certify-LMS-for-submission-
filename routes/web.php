@@ -43,7 +43,10 @@ use App\Http\Controllers\SectionQuestionController;
 use App\Http\Controllers\SectionQuizController;
 use App\Http\Controllers\SectionQuizResultController;
 use App\Http\Controllers\Settings\AvailabilityController as SettingsAvailabilityController;
+use App\Http\Controllers\Settings\SettingsAvatarController;
 use App\Http\Controllers\Settings\SettingsDefaultEnrollmentController;
+use App\Http\Controllers\Settings\SettingsPasswordController;
+use App\Http\Controllers\Settings\SettingsProfileController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WeakDrillController;
 use App\Http\Controllers\WeakDrillResultController;
@@ -79,6 +82,15 @@ Route::middleware('auth')->group(function () {
     Route::get('enrollments/{enrollment}', [EnrollmentController::class, 'show'])
         ->withTrashed()
         ->name('enrollments.show');
+
+    // 設定 (プロフィール・アバター・パスワード)
+    Route::prefix('settings')->name('settings.')->group(function () {
+        Route::get('profile', [SettingsProfileController::class, 'edit'])->name('profile.edit');
+        Route::patch('profile', [SettingsProfileController::class, 'update'])->name('profile.update');
+        Route::post('avatar', [SettingsAvatarController::class, 'store'])->name('avatar.store');
+        Route::delete('avatar', [SettingsAvatarController::class, 'destroy'])->name('avatar.destroy');
+        Route::put('password', [SettingsPasswordController::class, 'update'])->name('password.update');
+    });
 });
 
 // ============================================================

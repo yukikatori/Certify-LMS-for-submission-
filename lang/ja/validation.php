@@ -118,7 +118,15 @@ return [
     'url' => ':attribute の形式が正しくありません。',
     'uuid' => ':attribute は有効な UUID 形式で指定してください。',
 
-    'custom' => [],
+    'custom' => [
+        'current_password' => [
+            'current_password' => '現在のパスワードが正しくありません。',
+        ],
+    ],
 
-    'attributes' => [],
+    'attributes' => [
+        'current_password' => '現在のパスワード',
+        'password' => '新しいパスワード',
+        'password_confirmation' => '新しいパスワード(確認)',
+    ],
 ];
