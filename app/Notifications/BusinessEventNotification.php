@@ -49,6 +49,10 @@ final class BusinessEventNotification extends Notification
             ->greeting($notifiable->name.'さん')
             ->line($this->data['message']);
 
+        if (! empty($this->data['body'])) {
+            $mail->line($this->data['body']);
+        }
+
         if (! empty($this->data['action_url'])) {
             $mail->action('詳細を確認する', $this->data['action_url']);
         }
