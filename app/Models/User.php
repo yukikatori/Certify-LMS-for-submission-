@@ -139,6 +139,14 @@ class User extends Authenticatable
     }
 
     /**
+     * @return HasMany<EnrollmentNote, $this>
+     */
+    public function notes(): HasMany
+    {
+        return $this->hasMany(EnrollmentNote::class, 'user_id');
+    }
+
+    /**
      * @return HasMany<Certificate, $this>
      */
     public function certificates(): HasMany

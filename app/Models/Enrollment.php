@@ -91,6 +91,14 @@ class Enrollment extends Model
     }
 
     /**
+     * @return HasMany<EnrollmentNote, $this>
+     */
+    public function notes(): HasMany
+    {
+        return $this->hasMany(EnrollmentNote::class, 'enrollment_id');
+    }
+
+    /**
      * @return HasMany<EnrollmentGoal, $this>
      */
     public function goals(): HasMany
