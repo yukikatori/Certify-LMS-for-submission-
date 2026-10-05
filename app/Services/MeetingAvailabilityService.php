@@ -11,6 +11,7 @@ use App\Models\CoachAvailability;
 use App\Models\Meeting;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Throwable;
 
 /**
  * 担当コーチ集合の面談可能時間枠を 60 分単位で展開し、空きスロットを集計する Service。
@@ -21,10 +22,12 @@ use Illuminate\Support\Collection;
  */
 final class MeetingAvailabilityService
 {
+    public function __construct(
+        private GoogleCalendarService $googleCalendarService,
+    ) {}
+
     /**
      * 指定 Certification の担当コーチ集合について、指定日 1 日分の 60 分単位空きスロットを返す。
-     *
-     * 1 リクエストあたり availability 1 クエリ + meetings 1 クエリ で完結させる。
      *
      * @return Collection<int, array{slot_start: Carbon, slot_end: Carbon, available_coach_count: int}>
      */
@@ -34,7 +37,10 @@ final class MeetingAvailabilityService
         $dayEnd = $date->copy()->endOfDay();
         $dayOfWeek = $date->dayOfWeek;
 
-        $coaches = $certification->coaches()->get();
+        $coaches = $certification->coaches()
+            ->with('googleCredential')
+            ->get();
+
         if ($coaches->isEmpty()) {
             return collect();
         }
@@ -58,6 +64,27 @@ final class MeetingAvailabilityService
             ->groupBy('coach_id')
             ->map(fn ($rows) => $rows->map(fn (Meeting $m) => $m->scheduled_at->format('H:i'))->all());
 
+        $busyByCoach = [];
+
+        foreach ($coaches as $coach) {
+            $connection = $coach->googleCredential;
+
+            if (! $connection) {
+                continue;
+            }
+
+            try {
+                $busyByCoach[$coach->id] = $this->googleCalendarService->fetchBusyPeriods(
+                    $connection,
+                    $dayStart,
+                    $dayEnd,
+                );
+            } catch (Throwable $e) {
+                report($e);
+                $busyByCoach[$coach->id] = [];
+            }
+        }
+
         /** @var array<string, int> $slotCounts スロット開始時刻(H:i) → available coach 数 */
         $slotCounts = [];
 
@@ -69,8 +96,13 @@ final class MeetingAvailabilityService
                 $slotKey = $slot->format('H:i');
                 $coachId = $availability->coach_id;
                 $booked = $bookedByCoach[$coachId] ?? [];
+                $slotEnd = $slot->copy()->addHour();
 
-                if (! in_array($slotKey, $booked, true)) {
+                $blockedByGoogle = collect($busyByCoach[$coachId] ?? [])->contains(
+                    fn (array $busy): bool => $slot < $busy['end'] && $slotEnd > $busy['start']
+                );
+
+                if (! in_array($slotKey, $booked, true) && ! $blockedByGoogle) {
                     $slotCounts[$slotKey] = ($slotCounts[$slotKey] ?? 0) + 1;
                 }
 
