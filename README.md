@@ -101,8 +101,8 @@ http://localhost:8000 にアクセスし、下記の[ログインアカウント
 | ロール | メールアドレス | 備考 |
 |---|---|---|
 | 管理者 | admin@certify-lms.test | 全機能にアクセス可能 |
-| コーチ | coach@certify-lms.test | IT 系資格の担当 |
-| コーチ | coach2@certify-lms.test | ビジネス系資格の担当 |
+| コーチ | coach@certify-lms.test | IT 系資格の担当 / Google カレンダー連携済み |
+| コーチ | coach2@certify-lms.test | ビジネス系資格の担当 / Google カレンダー未連携 |
 | 受講生 | student@certify-lms.test | 受講中の資格・学習履歴・面談などのデモデータ付き |
 
 このほか、ライフサイクル（招待中 / 受講中 / 卒業 / 退会）を網羅したデモユーザーが投入されます。
@@ -152,5 +152,22 @@ sail bin pint --test     # 整形漏れの確認（CI 相当のチェック）
 `.env.example` をコピーするだけで、すべての機能がローカルで動作します（メールは Mailpit に配信されます）。
 
 - `PUSHER_*` — チャットのリアルタイム配信に使用します。有効にする場合は Pusher のキーを取得して設定し、`BROADCAST_DRIVER=pusher` に変更してください。未設定（既定の `BROADCAST_DRIVER=log`）でもメッセージの送受信自体は動作し、相手画面へのリアルタイム反映のみ行われません
+- `GOOGLE_CALENDAR_CLIENT_ID` / `GOOGLE_CALENDAR_CLIENT_SECRET` / `GOOGLE_CALENDAR_REDIRECT_URI` — コーチの Google カレンダー連携に使用します。実際に Google API と通信する場合は Google Cloud Console で OAuth クライアントを作成し、redirect URI に `http://localhost:8000/settings/google-calendar/callback` を登録してください
 
 新しい環境変数やセットアップ手順を追加した場合は、`.env.example` と本 README に追記し、チームの誰でも環境を再現できる状態を保ってください。
+
+## Google カレンダー連携
+
+コーチは面談設定画面から、自分の Google アカウントを任意で連携できます。連携済みコーチの場合、Google カレンダー上で予定が入っている時間帯は、受講生の面談予約画面の空き枠から除外されます。予約成立時にはコーチのプライマリカレンダーへ面談予定を作成し、面談キャンセル時には LMS が作成した予定を削除します。
+
+未連携コーチは従来通り、LMS 内の面談可能時間枠と既存予約のみで空き判定します。Google API との通信に失敗した場合も、面談予約・キャンセル・空き枠表示は停止せず、LMS 内の情報をもとに処理を継続します。
+
+OAuth では以下のスコープを利用します。
+
+- `https://www.googleapis.com/auth/calendar`
+- `https://www.googleapis.com/auth/userinfo.email`
+- `https://www.googleapis.com/auth/userinfo.profile`
+
+`migrate:fresh --seed` 後は `coach@certify-lms.test` が Google カレンダー連携済み、`coach2@certify-lms.test` が未連携の状態になります。ただし、Seeder のトークンは開発確認用のダミー値です。実際に Google API と通信する確認を行う場合は、コーチ本人でログインし、面談設定画面から OAuth 連携をやり直してください。
+
+現在の実装では、Google OAuth の access token / refresh token を DB に保存します。本番運用では、トークンの暗号化保存を推奨します。

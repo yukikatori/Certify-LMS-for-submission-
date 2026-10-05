@@ -10,9 +10,11 @@ use App\Exceptions\Mentoring\MeetingStatusTransitionException;
 use App\Models\Meeting;
 use App\Models\User;
 use App\Notifications\BusinessEventNotification;
+use App\Services\GoogleCalendarService;
 use App\Services\NotificationRecipientService;
 use App\UseCases\MeetingQuota\RefundQuotaAction;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * 当事者(受講生 or コーチ)による面談キャンセルのユースケース。
@@ -23,6 +25,7 @@ final class CancelAction
     public function __construct(
         private RefundQuotaAction $refundAction,
         private NotificationRecipientService $notificationRecipients,
+        private GoogleCalendarService $googleCalendarService,
     ) {}
 
     public function __invoke(User $actor, Meeting $meeting): Meeting
@@ -46,13 +49,41 @@ final class CancelAction
             ($this->refundAction)($locked->student, (string) $locked->id);
 
             DB::afterCommit(function () use ($locked, $actor): void {
-                $locked->loadMissing(['student', 'coach', 'enrollment.certification']);
+                $locked->loadMissing(['student', 'coach.googleCredential', 'enrollment.certification']);
+
+                $this->deleteGoogleCalendarEvent($locked);
 
                 $this->notifyMeetingCanceledRecipients($locked, $actor);
             });
 
             return $locked->fresh();
         });
+    }
+
+    private function deleteGoogleCalendarEvent(Meeting $meeting): void
+    {
+        if (! $meeting->google_calendar_event_id) {
+            return;
+        }
+
+        $connection = $meeting->coach?->googleCredential;
+
+        if (! $connection) {
+            return;
+        }
+
+        try {
+            $this->googleCalendarService->deleteEvent(
+                $connection,
+                $meeting->google_calendar_event_id,
+            );
+
+            $meeting->update([
+                'google_calendar_event_id' => null,
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+        }
     }
 
     private function notifyMeetingCanceledRecipients(Meeting $meeting, User $actor): void

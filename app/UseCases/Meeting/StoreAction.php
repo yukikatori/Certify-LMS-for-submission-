@@ -13,6 +13,7 @@ use App\Models\Meeting;
 use App\Models\User;
 use App\Notifications\BusinessEventNotification;
 use App\Services\CoachMeetingLoadService;
+use App\Services\GoogleCalendarService;
 use App\Services\MeetingAvailabilityService;
 use App\Services\MeetingQuotaService;
 use App\Services\NotificationRecipientService;
@@ -21,6 +22,7 @@ use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * 受講生の予約申請のユースケース。
@@ -35,6 +37,7 @@ final class StoreAction
         private MeetingQuotaService $quotaService,
         private ConsumeQuotaAction $consumeAction,
         private NotificationRecipientService $notificationRecipients,
+        private GoogleCalendarService $googleCalendarService,
     ) {}
 
     /**
@@ -84,13 +87,56 @@ final class StoreAction
             $meeting->update(['meeting_quota_transaction_id' => $transaction->id]);
 
             DB::afterCommit(function () use ($meeting): void {
-                $meeting->loadMissing(['student', 'coach', 'enrollment.certification']);
+                $meeting->loadMissing(['student', 'coach.googleCredential', 'enrollment.certification']);
+
+                $this->createGoogleCalendarEvent($meeting);
 
                 $this->notifyMeetingReservedRecipients($meeting);
             });
 
             return $meeting->fresh();
         });
+    }
+
+    private function createGoogleCalendarEvent(Meeting $meeting): void
+    {
+        $connection = $meeting->coach?->googleCredential;
+
+        if (! $connection) {
+            return;
+        }
+
+        try {
+            $eventId = $this->googleCalendarService->createEvent(
+                $connection,
+                'LMS面談',
+                $meeting->scheduled_at,
+                $meeting->scheduled_at->copy()->addHour(),
+                $this->buildGoogleCalendarDescription($meeting),
+                $meeting->meeting_url_snapshot,
+            );
+
+            $meeting->update([
+                'google_calendar_event_id' => $eventId,
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+        }
+    }
+
+    private function buildGoogleCalendarDescription(Meeting $meeting): string
+    {
+        $studentName = $meeting->student?->name ?? '受講生';
+        $certificationName = $meeting->enrollment?->certification?->name ?? '受講資格';
+        $meetingUrl = $meeting->meeting_url_snapshot ?? '未設定';
+
+        return implode("\n", [
+            'LMS面談',
+            '受講生: '.$studentName,
+            '資格: '.$certificationName,
+            '相談内容: '.$meeting->topic,
+            '面談URL: '.$meetingUrl,
+        ]);
     }
 
     private function notifyMeetingReservedRecipients(Meeting $meeting): void
@@ -128,8 +174,10 @@ final class StoreAction
     private function findAvailableCoaches(Certification $certification, Carbon $scheduledAt): Collection
     {
         $time = $scheduledAt->format('H:i:s');
+        $slotEnd = $scheduledAt->copy()->addHour();
 
-        return $certification->coaches()
+        $candidates = $certification->coaches()
+            ->with('googleCredential')
             ->whereHas('coachAvailabilities', function ($q) use ($scheduledAt, $time) {
                 $q->where('day_of_week', $scheduledAt->dayOfWeek)
                     ->where('is_active', true)
@@ -144,5 +192,29 @@ final class StoreAction
                     ]);
             })
             ->get();
+
+        return $candidates->reject(function (User $coach) use ($scheduledAt, $slotEnd): bool {
+            $connection = $coach->googleCredential;
+
+            if (! $connection) {
+                return false;
+            }
+
+            try {
+                $busyPeriods = $this->googleCalendarService->fetchBusyPeriods(
+                    $connection,
+                    $scheduledAt,
+                    $slotEnd,
+                );
+            } catch (Throwable $e) {
+                report($e);
+
+                return false;
+            }
+
+            return collect($busyPeriods)->contains(
+                fn (array $busy): bool => $scheduledAt < $busy['end'] && $slotEnd > $busy['start']
+            );
+        })->values();
     }
 }
