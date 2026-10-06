@@ -104,6 +104,7 @@ http://localhost:8000 にアクセスし、下記の[ログインアカウント
 | コーチ | coach@certify-lms.test | IT 系資格の担当 / Google カレンダー連携済み |
 | コーチ | coach2@certify-lms.test | ビジネス系資格の担当 / Google カレンダー未連携 |
 | 受講生 | student@certify-lms.test | 受講中の資格・学習履歴・面談などのデモデータ付き |
+| 受講生 | student-noquota@certify-lms.test | 面談残数 0 の予約拒否・追加購入動線確認用 |
 
 このほか、ライフサイクル（招待中 / 受講中 / 卒業 / 退会）を網羅したデモユーザーが投入されます。
 
@@ -138,6 +139,32 @@ sail artisan notifications:send-meeting-reminders --window=eve
 sail artisan notifications:send-meeting-reminders --window=one_hour_before
 ```
 
+## Stripe 追加面談購入
+
+受講中の受講生は `/meeting-quota/checkout` から公開中の面談パックを選び、Stripe Checkout で都度購入できます。カード情報は LMS 側では保持せず、Stripe からの Webhook `POST /webhooks/stripe` を署名検証して、完了した購入分だけ面談残数へ反映します。
+
+`migrate:fresh --seed` 後、公開中の面談パックと、状態の異なる購入デモデータが投入されます。
+
+- `student@certify-lms.test` には完了 / 保留 / 失敗の購入記録があります。完了分だけ面談回数履歴に「購入」として表示され、残面談回数に反映されます
+- `student-noquota@certify-lms.test` には保留 / 失敗の購入記録があります。残面談回数は 0 のままなので、予約画面から追加購入導線を確認できます
+
+ローカルで実際に Stripe 連携を確認する場合は、`.env` に以下を設定してください。
+
+```env
+STRIPE_KEY=pk_test_xxx
+STRIPE_SECRET=sk_test_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+```
+
+Webhook の確認例:
+
+```bash
+stripe login
+stripe listen --forward-to localhost:8000/webhooks/stripe
+```
+
+表示された `whsec_...` を `STRIPE_WEBHOOK_SECRET` に設定し直し、必要に応じて `sail artisan config:clear` を実行してから、受講生アカウントで購入フローを試してください。テストカードは `4242 4242 4242 4242`、将来日付の有効期限、任意の CVC を使用できます。決済完了後、Stripe CLI 経由で `checkout.session.completed` が `/webhooks/stripe` に転送され、完了した購入分だけ残面談回数が加算されます。
+
 ## テスト
 
 ```bash
@@ -171,6 +198,7 @@ sail bin pint --test     # 整形漏れの確認（CI 相当のチェック）
 
 - `PUSHER_*` — チャットのリアルタイム配信に使用します。有効にする場合は Pusher のキーを取得して設定し、`BROADCAST_DRIVER=pusher` に変更してください。未設定（既定の `BROADCAST_DRIVER=log`）でもメッセージの送受信自体は動作し、相手画面へのリアルタイム反映のみ行われません
 - `GOOGLE_CALENDAR_CLIENT_ID` / `GOOGLE_CALENDAR_CLIENT_SECRET` / `GOOGLE_CALENDAR_REDIRECT_URI` — コーチの Google カレンダー連携に使用します。実際に Google API と通信する場合は Google Cloud Console で OAuth クライアントを作成し、redirect URI に `http://localhost:8000/settings/google-calendar/callback` を登録してください
+- `STRIPE_KEY` / `STRIPE_SECRET` / `STRIPE_WEBHOOK_SECRET` — 追加面談購入の Stripe Checkout と Webhook 署名検証に使用します。Webhook secret は `stripe listen` で表示される `whsec_...` を設定してください
 
 新しい環境変数やセットアップ手順を追加した場合は、`.env.example` と本 README に追記し、チームの誰でも環境を再現できる状態を保ってください。
 

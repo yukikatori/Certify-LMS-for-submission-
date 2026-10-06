@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             PlanSeeder::class,
             UserLifecycleSeeder::class,
             MeetingPackSeeder::class,
+            MeetingQuotaPaymentSeeder::class,
             CertificationCategorySeeder::class,
             CertificationSeeder::class,
             InvitationSeeder::class,

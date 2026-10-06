@@ -22,6 +22,7 @@ use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\LearningHourTargetController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MeetingPackController;
+use App\Http\Controllers\MeetingQuotaController;
 use App\Http\Controllers\MeetingQuotaHistoryController;
 use App\Http\Controllers\MockExamAnswerController;
 use App\Http\Controllers\MockExamCatalogController;
@@ -51,6 +52,7 @@ use App\Http\Controllers\Settings\SettingsAvatarController;
 use App\Http\Controllers\Settings\SettingsDefaultEnrollmentController;
 use App\Http\Controllers\Settings\SettingsPasswordController;
 use App\Http\Controllers\Settings\SettingsProfileController;
+use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WeakDrillController;
 use App\Http\Controllers\WeakDrillResultController;
@@ -61,6 +63,8 @@ Route::get('/', function () {
         ? redirect()->route('dashboard.index')
         : redirect('/login');
 });
+
+Route::post('/webhooks/stripe', StripeWebhookController::class)->name('webhooks.stripe');
 
 // ============================================================
 // 認証フロー(オンボーディング: 招待 URL 経由の初回登録)
@@ -593,6 +597,11 @@ Route::middleware(['auth', 'role:coach'])
 // 受講生専用ルート(受講中=in_progress のみ通過)
 // ============================================================
 Route::middleware(['auth', 'role:student', 'active-learning'])->prefix('meeting-quota')->name('meeting-quota.')->group(function () {
+    // 追加面談購入
+    Route::get('checkout', [MeetingQuotaController::class, 'checkout'])->name('checkout.select');
+    Route::post('checkout', [MeetingQuotaController::class, 'store'])->name('checkout.create');
+    Route::get('success', [MeetingQuotaController::class, 'success'])->name('checkout.success');
+
     // 面談回数履歴
     Route::get('history', [MeetingQuotaHistoryController::class, 'index'])->name('history');
 });
