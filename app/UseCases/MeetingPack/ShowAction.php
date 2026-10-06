@@ -5,19 +5,19 @@ declare(strict_types=1);
 namespace App\UseCases\MeetingPack;
 
 use App\Models\MeetingPack;
-use Illuminate\Support\Collection;
 
 /**
  * admin 用の面談パック詳細を取得するユースケース。
- * 作成者・更新者を取得し、購入履歴は Payment 実装が入るまでは空コレクションとして扱う。
+ * 直近 20 件の購入履歴 / 支払い情報 / 作成者・更新情報を取得する。
  */
 final class ShowAction
 {
     public function __invoke(MeetingPack $plan): MeetingPack
     {
-        $plan->load(['createdBy', 'updatedBy']);
-        $plan->setRelation('payments', new Collection);
-
-        return $plan;
+        return $plan->load([
+            'payments' => fn ($query) => $query->latest()->limit(20)->with('user'),
+            'createdBy',
+            'updatedBy',
+        ]);
     }
 }
