@@ -8,10 +8,10 @@ use App\Enums\AnnouncementTargetType;
 use App\Enums\EnrollmentStatus;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
+use App\Jobs\SendAnnouncementNotificationsJob;
 use App\Models\Announcement;
 use App\Models\User;
-use App\Notifications\BusinessEventNotification;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -32,7 +32,7 @@ final class StoreAction
     {
         return DB::transaction(function () use ($admin, $validated): Announcement {
             $targetType = AnnouncementTargetType::from($validated['target_type']);
-            $recipients = $this->resolveRecipients($targetType, $validated);
+            $dispatchedCount = $this->recipientQuery($targetType, $validated)->count();
 
             $announcement = Announcement::create([
                 'title' => $validated['title'],
@@ -44,22 +44,12 @@ final class StoreAction
                 'target_user_id' => $targetType === AnnouncementTargetType::User
                     ? $validated['target_user_id']
                     : null,
-                'dispatched_count' => $recipients->count(),
+                'dispatched_count' => $dispatchedCount,
                 'dispatched_at' => now(),
                 'created_by' => $admin->id,
             ]);
 
-            foreach ($recipients as $recipient) {
-                $recipient->notify(new BusinessEventNotification([
-                    'notification_type' => 'admin_announcement',
-                    'title' => $announcement->title,
-                    'message' => '運営からのお知らせがあります。',
-                    'body' => $announcement->body,
-                    'body_preview' => mb_strimwidth($announcement->body, 0, 120, '...'),
-                    'related_type' => 'announcement',
-                    'related_id' => (string) $announcement->id,
-                ]));
-            }
+            DB::afterCommit(fn () => SendAnnouncementNotificationsJob::dispatch((string) $announcement->id));
 
             return $announcement;
         });
@@ -68,30 +58,24 @@ final class StoreAction
     /**
      * @param array<string, mixed> $validated
      *
-     * @return Collection<int, User>
+     * @return Builder<User>
      */
-    private function resolveRecipients(AnnouncementTargetType $targetType, array $validated): Collection
+    private function recipientQuery(AnnouncementTargetType $targetType, array $validated): Builder
     {
-        return match ($targetType) {
-            AnnouncementTargetType::AllStudents => User::query()
-                ->where('role', UserRole::Student->value)
-                ->where('status', UserStatus::InProgress->value)
-                ->get(),
+        $query = User::query()
+            ->where('role', UserRole::Student->value)
+            ->where('status', UserStatus::InProgress->value);
 
-            AnnouncementTargetType::Certification => User::query()
-                ->where('role', UserRole::Student->value)
-                ->where('status', UserStatus::InProgress->value)
-                ->whereHas('enrollments', fn ($q) => $q
+        return match ($targetType) {
+            AnnouncementTargetType::AllStudents => $query,
+
+            AnnouncementTargetType::Certification => $query
+                ->whereHas('enrollments', fn (Builder $q) => $q
                     ->where('certification_id', $validated['target_certification_id'])
                     ->where('status', EnrollmentStatus::Learning->value)
-                )
-                ->get(),
+                ),
 
-            AnnouncementTargetType::User => User::query()
-                ->where('role', UserRole::Student->value)
-                ->where('status', UserStatus::InProgress->value)
-                ->whereKey($validated['target_user_id'])
-                ->get(),
+            AnnouncementTargetType::User => $query->whereKey($validated['target_user_id']),
         };
     }
 }

@@ -6,6 +6,7 @@ namespace Tests\Unit\Notifications;
 
 use App\Models\User;
 use App\Notifications\BusinessEventNotification;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Tests\TestCase;
 
@@ -49,6 +50,16 @@ class BusinessEventNotificationTest extends TestCase
         $this->assertContains('コーチからメッセージが届きました。', $mail->introLines);
         $this->assertSame('詳細を確認する', $mail->actionText);
         $this->assertSame('https://example.test/chat-rooms/room-1', $mail->actionUrl);
+    }
+
+    public function test_notification_implements_should_queue_and_uses_notifications_queue(): void
+    {
+        $notification = new BusinessEventNotification($this->data());
+
+        $this->assertInstanceOf(ShouldQueue::class, $notification);
+        $this->assertSame('notifications', $notification->queue);
+        $this->assertSame(3, $notification->tries);
+        $this->assertSame([10, 60, 300], $notification->backoff());
     }
 
     /**
