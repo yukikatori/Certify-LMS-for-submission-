@@ -14,9 +14,11 @@ use App\Models\Certification;
 use App\Models\Enrollment;
 use App\Models\EnrollmentStatusLog;
 use App\Models\User;
+use App\Services\CertificatePdfGenerator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * 開発用 受講登録シーダー。
@@ -245,7 +247,13 @@ final class EnrollmentSeeder extends Seeder
      */
     private function issueCertificate(Enrollment $enrollment, ?Carbon $passedAt): void
     {
-        if (Certificate::query()->where('enrollment_id', $enrollment->id)->exists()) {
+        $existing = Certificate::query()->where('enrollment_id', $enrollment->id)->first();
+
+        if ($existing !== null) {
+            if (! Storage::disk('private')->exists($existing->pdf_path)) {
+                app(CertificatePdfGenerator::class)->generate($existing);
+            }
+
             return;
         }
 
@@ -254,5 +262,7 @@ final class EnrollmentSeeder extends Seeder
             ->create([
                 'issued_at' => $passedAt ?? now(),
             ]);
+
+        app(CertificatePdfGenerator::class)->generate($certificate);
     }
 }
