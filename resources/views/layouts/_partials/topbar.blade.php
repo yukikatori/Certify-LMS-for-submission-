@@ -6,6 +6,12 @@
 @php
     $user = auth()->user();
     $notificationBadge = $notificationBadge ?? 0;
+
+    $canUseNotificationPopover = in_array($user?->role, [
+        \App\Enums\UserRole::Student,
+        \App\Enums\UserRole::Coach,
+    ], true);
+
     // 教材検索は受講生のみが対象（管理者・コーチ向けの横断検索エンドポイントは存在しない）。
     // 検索結果はデフォルト資格にスコープされるため、デフォルト資格が設定されているときだけ検索バーを出す。
     $searchCertificationId = $user?->role === \App\Enums\UserRole::Student
@@ -44,7 +50,7 @@
     <div class="flex-1"></div>
 
     {{-- 通知ベル + 通知ポップオーバー(ベル横アンカー) --}}
-    @if (Route::has('notifications.index'))
+    @if ($canUseNotificationPopover && Route::has('notifications.index'))
         <div class="relative" data-notification-popover-root>
             <button
                 type="button"
