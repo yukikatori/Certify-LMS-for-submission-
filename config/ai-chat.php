@@ -12,5 +12,6 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-3.6-flash'),
         'base_url' => rtrim((string) env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'), '/'),
         'timeout' => (int) env('GEMINI_TIMEOUT', 30),
+        'retry_attempts' => (int) env('GEMINI_RETRY_ATTEMPTS', 1),
     ],
 ];
