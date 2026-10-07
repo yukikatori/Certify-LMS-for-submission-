@@ -14,7 +14,9 @@ use App\Models\Certification;
 use App\Models\Enrollment;
 use App\Models\EnrollmentStatusLog;
 use App\Models\User;
+use App\Services\CertificatePdfGenerator;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -69,6 +71,8 @@ final class CertificateSeeder extends Seeder
             $enrollment = $this->createPastEnrollment($student, $certification, $i);
             $this->issueCertificateForEnrollment($enrollment);
         }
+
+        $this->generateMissingPdfFiles();
     }
 
     /**
@@ -128,5 +132,22 @@ final class CertificateSeeder extends Seeder
                 'issued_at' => $issuedAt,
             ])
             ->create();
+
+        app(CertificatePdfGenerator::class)->generate($certificate);
+    }
+
+    /**
+     * 既存の初期データに Certificate レコードだけが残っている場合、PDF 実体を補完する。
+     */
+    private function generateMissingPdfFiles(): void
+    {
+        Certificate::query()
+            ->with(['user', 'certification'])
+            ->get()
+            ->each(function (Certificate $certificate): void {
+                if (! Storage::disk('private')->exists($certificate->pdf_path)) {
+                    app(CertificatePdfGenerator::class)->generate($certificate);
+                }
+            });
     }
 }
