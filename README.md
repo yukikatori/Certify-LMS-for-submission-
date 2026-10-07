@@ -112,6 +112,29 @@ http://localhost:8000 にアクセスし、下記の[ログインアカウント
 
 > 本サービスは**招待制**です。公開の会員登録画面はありません。新規ユーザーを作るには、管理者でログイン → ユーザー管理から招待 → Mailpit で招待メールの URL を開く → オンボーディング登録、という流れになります。
 
+## キューワーカー
+
+通知・メール送信は DB キューで非同期処理します。ローカル開発では、アプリケーションとは別ターミナルで worker を起動してください。
+
+```bash
+sail artisan queue:work database --queue=notifications,mail,default --tries=3 --backoff=10,60,300 --timeout=60
+```
+
+失敗したジョブは `failed_jobs` テーブルに記録されます。
+
+```bash
+sail artisan queue:failed
+sail artisan queue:retry all
+sail artisan queue:retry {id}
+sail artisan queue:forget {id}
+```
+
+worker にコード変更を反映したい場合は再起動シグナルを送ります。
+
+```bash
+sail artisan queue:restart
+```
+
 ## AI 相談（Gemini）
 
 受講中の受講生は、画面右下のフローティングウィジェットまたは `/ai-chat` から Gemini に学習相談できます。教材 Section 画面から開始した会話には閲覧中 Section の文脈が紐づき、それ以外の画面ではデフォルト受講資格の文脈で相談を開始します。

@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\UseCases\Meeting;
 
 use App\Enums\MeetingStatus;
+use App\Jobs\SendMeetingReminderNotificationJob;
 use App\Models\Meeting;
 use App\Models\User;
-use App\Notifications\BusinessEventNotification;
 use App\Services\NotificationRecipientService;
 use Illuminate\Support\Facades\DB;
 
@@ -48,47 +48,12 @@ final class SendMeetingReminderAction
                     'updated_at' => now(),
                 ]);
 
-                $delivery = DB::table('meeting_reminder_deliveries')
-                    ->where('meeting_id', $meeting->id)
-                    ->where('recipient_user_id', $recipient->id)
-                    ->where('window', $window)
-                    ->lockForUpdate()
-                    ->first();
-                
-                if ($delivery === null || $delivery->delivered_at !== null) {
-                    return;
-                }
-
-                $recipient->notify(new BusinessEventNotification([
-                    'notification_type' => 'meeting_reminder_'.$window,
-                    'title' => '面談リマインダー',
-                    'message' => $this->message($meeting, $window),
-                    'body_preview' => mb_strimwidth($meeting->topic ?? '', 0, 120, '...'),
-                    'action_url' => route('meetings.show', $meeting),
-                    'related_type' => 'meeting',
-                    'related_id' => (string) $meeting->id,
-                ]));
-
-                DB::table('meeting_reminder_deliveries')
-                    ->where('id', $delivery->id)
-                    ->update([
-                        'delivered_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                SendMeetingReminderNotificationJob::dispatch(
+                    (string) $meeting->id,
+                    (string) $recipient->id,
+                    $window,
+                );
             });
         }
-    }
-
-    private function message(Meeting $meeting, string $window): string
-    {
-        $scheduledAt = $meeting->scheduled_at->format('Y/m/d H:i');
-        $certificationName = $meeting->enrollment?->certification?->name ?? '受講資格';
-
-        $label = match ($window) {
-            'eve' => '明日',
-            'one_hour_before' => '1時間後',
-        };
-
-        return "{$certificationName}の面談が{$label} ({$scheduledAt}) に予定されています。";
     }
 }
