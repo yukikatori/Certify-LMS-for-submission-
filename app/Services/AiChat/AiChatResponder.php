@@ -6,7 +6,6 @@ namespace App\Services\AiChat;
 
 use App\Enums\AiChatMessageRole;
 use App\Models\AiChatConversation;
-use Illuminate\Support\Str;
 
 /**
  * 会話データを Gemini API 用のリクエスト payload に変換して、GeminiClient に渡すサービス
@@ -95,13 +94,14 @@ final class AiChatResponder
         ]);
 
         $title = trim($response->text);
-        $title = trim($title, " \t\n\r\0\x0B「」『』\"'");
+        $title = trim($title, " \t\n\r\0\x0B\"'");
+        $title = preg_replace('/\A[「『]+|[」』]+\z/u', '', $title) ?? '';
 
         if ($title === '') {
             return null;
         }
 
-        return Str::limit($title, 100, '');
+        return mb_substr($title, 0, 100, 'UTF-8');
     }
 
     private function titlePrompt(AiChatConversation $conversation): string

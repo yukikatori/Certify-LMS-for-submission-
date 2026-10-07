@@ -54,6 +54,8 @@
             "@php artisan key:generate --ansi"
         ],
         "test": "@php vendor/bin/phpunit",
+        "test:external-api": "@php vendor/bin/phpunit --group external-api",
+        "test:without-external-api": "@php vendor/bin/phpunit --exclude-group external-api",
         "test:coverage": "@php -d xdebug.mode=coverage vendor/bin/phpunit --coverage-text",
         "test:coverage-html": "@php -d xdebug.mode=coverage vendor/bin/phpunit --coverage-html=coverage-report",
         "test:coverage-min": "@php -d xdebug.mode=coverage vendor/bin/phpunit --coverage-text --coverage-clover=coverage.xml --min=80"
